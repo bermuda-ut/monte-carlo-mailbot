@@ -6,6 +6,8 @@ import automail.MailItem;
 import automail.StorageTube;
 import exceptions.TubeFullException;
 
+import java.util.List;
+
 /**
  * Created by noxm on 13/03/17.
  */
@@ -25,19 +27,16 @@ public class AdvancedMailSorter implements IMailSorter {
         try{
             int initialDestination = -1;
 
-            while (!advancedMailPool.isEmptyPool() && !tube.isFull()) {
-                MailItem mailItem = advancedMailPool.getMail(tube.getTotalOfSizes(), initialDestination);
-//                System.out.println(mailItem);
-
-                if(mailItem != null) {
-
-                    if(initialDestination < 0)
-                        initialDestination = mailItem.getDestFloor();
-
+            if (!advancedMailPool.isEmptyPool()) {
+                List<MailItem> mailItems = advancedMailPool.getMails();
+                for(MailItem mailItem : mailItems) {
                     tube.addItem(mailItem);
-                } else {
-                    return true;
                 }
+
+                if(mailItems.size() > 0)
+                    return true;
+                else
+                    return false;
             }
         } catch(TubeFullException e){
             return true;
