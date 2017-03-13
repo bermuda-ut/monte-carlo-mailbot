@@ -10,11 +10,30 @@ import java.util.*;
 public class AdvancedMailPool implements IMailPool {
     List<MailItem> mailPool;
 
-    public static int MAX_CAPACITY = 4; // because its not static in StorageTube!
-    public static double MIN_SCORE = 0.6;
+    public static final int MAX_CAPACITY = 4; // because its not static in StorageTube!
+
+    private static final double SUM_PRIORITY_FACTOR = 0.05;
+    private static final double MAX_GAP_FACTOR = 1.25;
+    private static final double MAX_DEST_FACTOR = 1.3;
+    private static final double RATIO_FACTOR = 0.1;
+
+    private static final double MIN_SCORE = 0.50;
+    private static final double TIME_PADDING = 5;
 
     public AdvancedMailPool() {
         mailPool = new ArrayList<>();
+    }
+
+    public static int getMailIntPriority(MailItem mailItem) {
+        String priorityLevel = mailItem.getPriorityLevel();
+
+        for(int i = 0; i < MailItem.PRIORITY_LEVELS.length; i++) {
+            if (priorityLevel.equals(MailItem.PRIORITY_LEVELS[i])) {
+                return i + 1;
+            }
+        }
+
+        return 0;
     }
 
     public List<MailItem> getMails() {
@@ -26,6 +45,7 @@ public class AdvancedMailPool implements IMailPool {
             combinations.add(currList);
         }
 
+        // generate all resulting leafs
         for(int i = 0; i < MAX_CAPACITY; i++) {
             List<List<MailItem>> branch = new ArrayList<>();
 
@@ -68,7 +88,8 @@ public class AdvancedMailPool implements IMailPool {
             }
         }
 
-        if(Clock.Time() < Clock.LAST_DELIVERY_TIME && maxScore < MIN_SCORE) {
+        // edge case
+        if(Clock.Time() < Clock.LAST_DELIVERY_TIME - TIME_PADDING && maxScore < MIN_SCORE) {
             return Collections.EMPTY_LIST;
         }
 
@@ -83,16 +104,19 @@ public class AdvancedMailPool implements IMailPool {
         int maxGap = maxGap(mailList) + 1;
 
         for(MailItem mailItem: mailList) {
-            sumPriority += MailCompare.getMailIntPriority(mailItem);
+            sumPriority += getMailIntPriority(mailItem);
 
             if(mailItem.getDestFloor() > maxDest)
                 maxDest = mailItem.getDestFloor();
         }
 
-        double finalScore = 1.0 * (sumPriority * 10) / (maxGap * 2) / (maxDest * 0.5) * totalSize(mailList) / MAX_CAPACITY;
-        if(finalScore > MIN_SCORE) {
-            System.out.println(finalScore);
-        }
+        double sumScore = SUM_PRIORITY_FACTOR * sumPriority;
+        double gapScore = MAX_GAP_FACTOR / maxGap;
+        double destScore = MAX_DEST_FACTOR / maxDest;
+        double ratiScore = RATIO_FACTOR * totalSize(mailList) / MAX_CAPACITY;
+
+
+        double finalScore = sumScore + gapScore + destScore + ratiScore;
         return finalScore;
     }
 
