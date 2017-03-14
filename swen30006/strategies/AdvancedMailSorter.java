@@ -1,9 +1,6 @@
 package strategies;
 
-import automail.Clock;
-import automail.IMailSorter;
-import automail.MailItem;
-import automail.StorageTube;
+import automail.*;
 import exceptions.TubeFullException;
 
 import java.util.List;
@@ -12,8 +9,7 @@ import java.util.List;
  * Created by noxm on 13/03/17.
  */
 public class AdvancedMailSorter implements IMailSorter {
-
-    AdvancedMailPool advancedMailPool;
+    private AdvancedMailPool advancedMailPool;
 
     public AdvancedMailSorter(AdvancedMailPool advancedMailPool) {
         this.advancedMailPool = advancedMailPool;
@@ -21,10 +17,9 @@ public class AdvancedMailSorter implements IMailSorter {
 
     @Override
     public boolean fillStorageTube(StorageTube tube) {
-
 //    	System.out.println("Mail Items Left: "+ advancedMailPool.size());
 
-        try{
+        try {
             int initialDestination = -1;
 
             if (!advancedMailPool.isEmptyPool()) {
@@ -33,10 +28,11 @@ public class AdvancedMailSorter implements IMailSorter {
                     tube.addItem(mailItem);
                 }
 
-                if(mailItems.size() > 0)
+                if(mailItems.size() > 0) {
                     return true;
-                else
+                } else {
                     return false;
+                }
             }
         } catch(TubeFullException e){
             return true;
