@@ -16,6 +16,8 @@ public class Robot {
     
     private MailItem deliveryItem;
 
+    private int logtime;
+
     /**
      * Initiates the robot's location at the start to be at the mailroom
      * also set it to be waiting for mail.
@@ -27,6 +29,7 @@ public class Robot {
         tube = new StorageTube();
         this.sorter = sorter;
         this.delivery = delivery;
+        this.logtime = 0;
     }
 
     /**
@@ -54,6 +57,7 @@ public class Robot {
                 /** If the StorageTube is ready and the Robot is waiting in the mailroom then start the delivery */
                 if(go){
                 	current_state = RobotState.DELIVERING;
+                    logtime = Clock.Time();
                 	setRoute();
                 }
                 break;

@@ -20,8 +20,6 @@ public class AdvancedMailSorter implements IMailSorter {
 //    	System.out.println("Mail Items Left: "+ advancedMailPool.size());
 
         try {
-            int initialDestination = -1;
-
             if (!advancedMailPool.isEmptyPool()) {
                 List<MailItem> mailItems = advancedMailPool.getMails();
                 for(MailItem mailItem : mailItems) {
