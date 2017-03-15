@@ -16,7 +16,9 @@ public class AdvancedMailPool implements IMailPool {
     public static final int MAX_CAPACITY = (new StorageTube()).MAXIMUM_CAPACITY; // because its not static in StorageTube!
 
     public static final int MAX_BRANCHING_FACTOR = 5;
-    public static final int MAX_DEPTH = 3;
+    public static final int MAX_DEPTH = 4;
+    public static final int MIN_SCORE = 60;
+    public static final int MAX_BRANCHES = 50;
 
     private static final double SUM_PRIORITY_FACTOR = 0.05;
     private static final double MAX_GAP_FACTOR = 1.25;
@@ -43,12 +45,62 @@ public class AdvancedMailPool implements IMailPool {
     public List<MailItem> getMails() {
         // get most effective combination
         List<List<MailItem>> combinations = new ArrayList<>();
-        for(MailItem mailItem : mailPool) {
+        Stack<List<MailItem>> stack = new Stack<>();
+        int branchCount = Math.min(MAX_BRANCHES, mailPool.size());
+
+        Collections.shuffle(mailPool, new Random());
+        for(int m = 0; m < branchCount; m++) {
             List<MailItem> currList = new ArrayList<>();
-            currList.add(mailItem);
-            combinations.add(currList);
+            currList.add(mailPool.get(m));
+            stack.add(currList);
+        }
+        Collections.shuffle(stack, new Random());
+
+        while(stack.size() > 0) {
+//        for(int b = 0; b < branchCount; b++) {
+//            System.out.println(combinations.size() + " " + stack.size());
+//            System.out.println(stack);
+            List<MailItem> currCombination = stack.pop();
+            double currScore = combinationScore(currCombination);
+            boolean modified = false;
+
+            if(currCombination.size() >= MAX_DEPTH) {
+                combinations.add(currCombination);
+                continue;
+            }
+
+            Collections.shuffle(mailPool);
+            for(int i = 0; i < branchCount; i++) {
+                MailItem toAdd = mailPool.get(i);
+
+                boolean effective = false;
+                if((toAdd.getDestFloor() > Building.MAILROOM_LOCATION && currCombination.get(0).getDestFloor() > Building.MAILROOM_LOCATION) ||
+                   (toAdd.getDestFloor() < Building.MAILROOM_LOCATION && currCombination.get(0).getDestFloor() < Building.MAILROOM_LOCATION))
+                    effective = true;
+
+                if(!effective)
+                    continue;
+
+                // not found in current combination
+                if(currCombination.indexOf(toAdd) < 0) {
+                    List<MailItem> newCombination = new ArrayList<>(currCombination);
+                    newCombination.add(toAdd);
+
+                    double newScore = combinationScore(newCombination);
+                    if(newScore >= currScore && totalSize(newCombination) <= MAX_CAPACITY) {
+                        stack.add(newCombination);
+                        modified = true;
+                        break;
+                    }
+                }
+            }
+
+            if(!modified) {
+                combinations.add(currCombination);
+            }
         }
 
+        /*
         // generate tree and get the final leaves
         int depth = (MAX_CAPACITY < MAX_DEPTH) ? MAX_CAPACITY : MAX_DEPTH;
 
@@ -68,6 +120,10 @@ public class AdvancedMailPool implements IMailPool {
                         MailItem mailItem = mailPool.get(randomNum);
 
                         // if not in the pool
+                        if(combinationScore(combination) >= MIN_SCORE) {
+                            continue;
+                        }
+
                         if(combination.indexOf(mailItem) < 0) {
                             List<MailItem> newCombination = new ArrayList<>();
                             newCombination.addAll(combination);
@@ -87,6 +143,7 @@ public class AdvancedMailPool implements IMailPool {
 
             combinations = branch;
         }
+        */
 
         // get most efficient combination
         double maxScore = 0;
