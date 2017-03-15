@@ -1,12 +1,14 @@
 package strategies;
 
-import automail.*;
+import automail.IMailSorter;
+import automail.MailItem;
+import automail.StorageTube;
 import exceptions.TubeFullException;
 
 import java.util.List;
 
 /**
- * Created by noxm on 13/03/17.
+ * Recieves mails from AdvancedMailPool and puts them into the tube for the robot
  */
 public class AdvancedMailSorter implements IMailSorter {
     private AdvancedMailPool advancedMailPool;
@@ -15,32 +17,31 @@ public class AdvancedMailSorter implements IMailSorter {
         this.advancedMailPool = advancedMailPool;
     }
 
+    /***
+     * Fill the tube with effective combination of mails to deliver
+     * @param tube
+     * @return true/false - whether the robot is ready to leave
+     */
     @Override
     public boolean fillStorageTube(StorageTube tube) {
-//    	System.out.println("Mail Items Left: "+ advancedMailPool.size());
-
+        // System.out.println("Mail Items Left: "+ advancedMailPool.size());
         try {
             if (!advancedMailPool.isEmptyPool()) {
+                // get bunch of mails to deliver and add them all to the tube
                 List<MailItem> mailItems = advancedMailPool.getMails();
-                for(MailItem mailItem : mailItems) {
+                for (MailItem mailItem : mailItems) {
                     tube.addItem(mailItem);
                 }
 
-                if(mailItems.size() > 0) {
+                // if stuff were actually added, send the robot!
+                if (mailItems.size() > 0) {
                     return true;
                 } else {
                     return false;
                 }
             }
-        } catch(TubeFullException e){
-            return true;
-        }
-
-        /**
-         * Handles the case where the last delivery time has elapsed and there are no more
-         * items to deliver.
-         */
-        if(Clock.Time() > Clock.LAST_DELIVERY_TIME && advancedMailPool.isEmptyPool() && !tube.isEmpty()){
+        } catch (TubeFullException e) {
+            // This won't happen due to the smart behaviour in advancedMailPool
             return true;
         }
 

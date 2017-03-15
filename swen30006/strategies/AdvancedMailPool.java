@@ -3,30 +3,16 @@ package strategies;
 import automail.*;
 
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
-
-import static java.lang.Math.abs;
 
 /**
- * Created by noxm on 13/03/17.
+ * Smart mail pool that returns efficient combination to put into the tube
  */
 public class AdvancedMailPool implements IMailPool {
-    List<MailItem> mailPool;
-
     public static final int MAX_CAPACITY = (new StorageTube()).MAXIMUM_CAPACITY; // because its not static in StorageTube!
-
     public static final int MAX_DEPTH = 4;
-    public static final int MAX_BRANCHES = 20;
-    public static final int OVERSHOT = 10000;
-
-    public static final int MAX_BRANCHING_FACTOR = 5;
-    public static final int MIN_SCORE = 0;
-
-    private static final double SUM_PRIORITY_FACTOR = 0.05;
-    private static final double MAX_GAP_FACTOR = 1.25;
-    private static final double MAX_DEST_FACTOR = 1.3;
-    private static final double RATIO_FACTOR = 0.1;
-    private static final double EFFIC_FACTOR = 0.3;
+    public static final int MAX_BRANCHES = 17;
+    public static final int OVERSHOT = 1000;
+    List<MailItem> mailPool;
 
     public AdvancedMailPool() {
         mailPool = new ArrayList<>();
@@ -38,7 +24,7 @@ public class AdvancedMailPool implements IMailPool {
      * @return priority in double
      */
     public static double getMailPriorityDouble(MailItem mailItem) {
-        switch(mailItem.getPriorityLevel()){
+        switch (mailItem.getPriorityLevel()) {
             case "LOW":
                 return 1;
             case "MEDIUM":
@@ -50,40 +36,25 @@ public class AdvancedMailPool implements IMailPool {
     }
 
     /***
-     * For sorting mails by destination floor
-     */
-    class MailItemComparator implements Comparator<MailItem> {
-        @Override
-        public int compare(MailItem a, MailItem b) {
-            if(a.getDestFloor() < b.getDestFloor())
-                return -1;
-            else if(a.getDestFloor() > b.getDestFloor())
-                return 1;
-            return 0;
-        }
-    }
-
-    /***
-     * Get list of mails to deliver
+     * Get a efficient combination of mails to deliver
+     * Utilizes Monte Carlo Search
      * @return list of mails
      */
     public List<MailItem> getMails() {
-
-        // get most effective combination
         List<List<MailItem>> combinations = new ArrayList<>();
         Stack<List<MailItem>> stack = new Stack<>();
         int branchCount = Math.min(MAX_BRANCHES, mailPool.size());
         int depth = Math.min(MAX_DEPTH, MAX_CAPACITY);
 
-        Collections.shuffle(mailPool);
-        for(int m = 0; m < branchCount; m++) {
+        // random start
+        Collections.shuffle(mailPool, new Random(mailPool.size()));
+        for (int m = 0; m < branchCount; m++) {
             List<MailItem> currList = new ArrayList<>();
             currList.add(mailPool.get(m));
             stack.add(currList);
         }
-        Collections.shuffle(stack);
 
-        while(stack.size() > 0) {
+        while (stack.size() > 0) {
             List<MailItem> currCombination = stack.pop();
 
             currCombination.sort(new MailItemComparator());
@@ -91,112 +62,61 @@ public class AdvancedMailPool implements IMailPool {
             double currScore = getEfficiency(currCombination);
             boolean modified = false;
 
-            if(currCombination.size() >= depth) {
+            if (currCombination.size() >= depth) {
                 combinations.add(currCombination);
                 continue;
             }
 
-            Collections.shuffle(mailPool);
-            for(int i = 0; i < branchCount; i++) {
+            // randomize and choose a mail to add to the combination
+            Collections.shuffle(mailPool, new Random(stack.size()));
+            for (int i = 0; i < branchCount; i++) {
                 MailItem toAdd = mailPool.get(i);
 
-                boolean effective = false;
-                if((toAdd.getDestFloor() > Building.MAILROOM_LOCATION && currCombination.get(0).getDestFloor() > Building.MAILROOM_LOCATION) ||
-                   (toAdd.getDestFloor() < Building.MAILROOM_LOCATION && currCombination.get(0).getDestFloor() < Building.MAILROOM_LOCATION))
-                    effective = true;
-
-                if(!effective)
+                // logic: if destination you are going to go is above and below mail room, you might aswell re-pick up
+                // the mails since you are guaranteed to enter the mailroom again
+                // The following statement prevents such combination
+                if (!(toAdd.getDestFloor() > Building.MAILROOM_LOCATION &&
+                        currCombination.get(0).getDestFloor() > Building.MAILROOM_LOCATION) &&
+                        !(toAdd.getDestFloor() < Building.MAILROOM_LOCATION &&
+                                currCombination.get(0).getDestFloor() < Building.MAILROOM_LOCATION))
                     continue;
 
                 // not found in current combination
-                if(currCombination.indexOf(toAdd) < 0) {
+                if (currCombination.indexOf(toAdd) < 0) {
                     List<MailItem> newCombination = new ArrayList<>(currCombination);
                     newCombination.add(toAdd);
                     newCombination.sort(new MailItemComparator());
 
+                    // only traverse down the graph if the score is increasing and is below maximum capacity
                     double newScore = getEfficiency(newCombination);
-                    if(newScore >= currScore && totalSize(newCombination) <= MAX_CAPACITY) {
+                    if (newScore >= currScore && totalSize(newCombination) <= MAX_CAPACITY) {
                         stack.add(newCombination);
                         modified = true;
                     }
                 }
             }
 
-            if(!modified) {
+            // when anything below current leaf is most likely to be lower, just add current leaf
+            if (!modified) {
                 combinations.add(currCombination);
             }
         }
-        /*
-        List<List<MailItem>> combinations = new ArrayList<>();
-        for(MailItem mailItem : mailPool) {
-            List<MailItem> currList = new ArrayList<>();
-            currList.add(mailItem);
-            combinations.add(currList);
-        }
-
-        // generate tree and get the final leaves
-        int depth = (MAX_CAPACITY < MAX_DEPTH) ? MAX_CAPACITY : MAX_DEPTH;
-
-        for(int i = 0; i < depth; i++) {
-            List<List<MailItem>> branch = new ArrayList<>();
-
-            for(List<MailItem> combination: combinations) {
-                int totalSize = totalSize(combination);
-                boolean branchedOut = false;
-
-                if(totalSize < MAX_CAPACITY) {
-                    int branchingFactor = (mailPool.size() < MAX_BRANCHING_FACTOR)? mailPool.size(): MAX_BRANCHING_FACTOR;
-                    int trial = 0;
-
-                    for(int j = 0; j < branchingFactor; j++) {
-                        int randomNum = ThreadLocalRandom.current().nextInt(0, mailPool.size());
-                        MailItem mailItem = mailPool.get(randomNum);
-
-                        // if not in the pool
-                        if(combinationScore(combination) >= MIN_SCORE) {
-                            continue;
-                        }
-
-                        if(combination.indexOf(mailItem) < 0) {
-                            List<MailItem> newCombination = new ArrayList<>();
-                            newCombination.addAll(combination);
-                            newCombination.add(mailItem);
-                            newCombination.sort(new MailItemComparator());
-                            // add the combination
-                            if(totalSize(newCombination) <= MAX_CAPACITY) {
-                                branchedOut = true;
-                                branch.add(newCombination);
-                            }
-                        }
-                    }
-                }
-
-                if(!branchedOut)
-                    branch.add(combination);
-            }
-
-            combinations = branch;
-        }
-        */
 
         // get most efficient combination
         double maxScore = 0;
         List<MailItem> curr = combinations.get(0);
 
-        for(List<MailItem> combination: combinations) {
+        for (List<MailItem> combination : combinations) {
             combination.sort(new MailItemComparator());
             double score = getEfficiency(combination);
-            if(score > maxScore) {
+
+            if (score > maxScore) {
                 curr = combination;
                 maxScore = score;
             }
         }
 
         mailPool.removeAll(curr);
-//        System.out.println("");
-//        System.out.println(curr);
-//        System.out.println("EXPECT " + simulateDeliveryScore(curr));
-//        System.out.println("STEPS " + getSteps(curr));
         return curr;
     }
 
@@ -207,8 +127,8 @@ public class AdvancedMailPool implements IMailPool {
      */
     private int minFloor(List<MailItem> mailList) {
         int min = mailList.get(0).getDestFloor();
-        for(MailItem mailItem : mailList) {
-            if(min > mailItem.getDestFloor())
+        for (MailItem mailItem : mailList) {
+            if (min > mailItem.getDestFloor())
                 min = mailItem.getDestFloor();
         }
 
@@ -222,8 +142,8 @@ public class AdvancedMailPool implements IMailPool {
      */
     private int maxFloor(List<MailItem> mailList) {
         int max = mailList.get(0).getDestFloor();
-        for(MailItem mailItem : mailList) {
-            if(max < mailItem.getDestFloor())
+        for (MailItem mailItem : mailList) {
+            if (max < mailItem.getDestFloor())
                 max = mailItem.getDestFloor();
         }
         return max;
@@ -241,13 +161,13 @@ public class AdvancedMailPool implements IMailPool {
         double score = 0;
 
         // Determine the priority_weight
-        for(MailItem deliveryItem: deliveryItems) {
+        for (MailItem deliveryItem : deliveryItems) {
             // Travel time
             currTime += Math.abs(currFloor - deliveryItem.getDestFloor());
 
-            // deliver scorend time
+            // deliver and add time
             double priority_weight = getMailPriorityDouble(deliveryItem);
-            score += Math.pow(currTime - deliveryItem.getArrivalTime(),penalty)*priority_weight;
+            score += Math.pow(currTime - deliveryItem.getArrivalTime(), penalty) * priority_weight;
             currTime += 1;
             currFloor = deliveryItem.getDestFloor();
         }
@@ -258,6 +178,7 @@ public class AdvancedMailPool implements IMailPool {
     /**
      * Calculate efficiency for the given list of mails to deliver
      * efficiency = estimatedScore / steps = score per steps
+     *
      * @param mailItemList
      * @return efficiency score
      */
@@ -265,7 +186,7 @@ public class AdvancedMailPool implements IMailPool {
         int steps = getSteps(mailItemList);
         double score = simulateDeliveryScore(mailItemList);
 
-        return 1.0 * (score/steps);
+        return 1.0 * (score / steps);
     }
 
     /***
@@ -277,52 +198,22 @@ public class AdvancedMailPool implements IMailPool {
         // time units required to finish delivering
         int steps = mailList.size();
 
-        if(maxFloor(mailList) > Building.MAILROOM_LOCATION)
+        if (maxFloor(mailList) > Building.MAILROOM_LOCATION)
             steps += Math.abs(maxFloor(mailList) - Building.MAILROOM_LOCATION) * 2;
-        if(minFloor(mailList) < Building.MAILROOM_LOCATION)
+        if (minFloor(mailList) < Building.MAILROOM_LOCATION)
             steps += Math.abs(minFloor(mailList) - Building.MAILROOM_LOCATION) * 2;
 
         return steps;
     }
 
-    private double combinationScore(List<MailItem> mailList) {
-        int sumPriority = 0;
-        int maxGap = maxGap(mailList) + 1;
-
-        int maxFloor = maxFloor(mailList);
-        int minFloor = minFloor(mailList);
-        int minFactor = Math.min(minFloor, Building.MAILROOM_LOCATION);
-        int maxFactor = Math.max(maxFloor, Building.MAILROOM_LOCATION);
-        int maxDest = maxFactor - minFactor;
-
-        double sumScore = SUM_PRIORITY_FACTOR * sumPriority;
-        double gapScore = MAX_GAP_FACTOR / maxGap;
-        double destScore = MAX_DEST_FACTOR / maxDest;
-        double ratiScore = RATIO_FACTOR * totalSize(mailList) / MAX_CAPACITY;
-        double efficiency = EFFIC_FACTOR * getEfficiency(mailList);
-
-        double finalScore = sumScore + gapScore + destScore + ratiScore;
-        return finalScore * efficiency;
-    }
-
-    private int maxGap(List<MailItem> mailList) {
-        int min = 1;
-        int max = 1;
-
-        for(MailItem mailItem : mailList) {
-            int floor = mailItem.getDestFloor();
-            if(floor > max)
-                max = floor;
-            if(floor < min)
-                min = floor;
-        }
-
-        return max - min;
-    }
-
+    /***
+     * Get total size of the current list of mails
+     * @param mailList list of mails to consider
+     * @return sum of sizes
+     */
     private int totalSize(List<MailItem> mailList) {
         int total = 0;
-        for(MailItem mailItem : mailList) {
+        for (MailItem mailItem : mailList) {
             total += mailItem.getSize();
         }
         return total;
@@ -342,12 +233,26 @@ public class AdvancedMailPool implements IMailPool {
      * @return true/false
      */
     public boolean isEmptyPool() {
-        if(mailPool.size() > 0)
+        if (mailPool.size() > 0)
             return false;
         return true;
     }
 
     public int size() {
         return mailPool.size();
+    }
+
+    /***
+     * For sorting mails by destination floor
+     */
+    class MailItemComparator implements Comparator<MailItem> {
+        @Override
+        public int compare(MailItem a, MailItem b) {
+            if (a.getDestFloor() < b.getDestFloor())
+                return -1;
+            else if (a.getDestFloor() > b.getDestFloor())
+                return 1;
+            return 0;
+        }
     }
 }
