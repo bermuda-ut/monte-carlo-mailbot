@@ -8,10 +8,18 @@ import java.util.*;
  * Smart mail pool that returns efficient combination to put into the tube
  */
 public class AdvancedMailPool implements IMailPool {
-    public static final int MAX_CAPACITY = (new StorageTube()).MAXIMUM_CAPACITY; // because its not static in StorageTube!
-    public static final int MAX_DEPTH = 4;
-    public static final int MAX_BRANCHES = 17;
-    public static final int OVERSHOT = 1000;
+    // Would love to use the one defined in StorageTube but its not static in StorageTube!
+    private static final int MAX_CAPACITY = (new StorageTube()).MAXIMUM_CAPACITY;
+    private static final int MAX_DEPTH = 4;     // Maximum depth of the tree
+    private static final int MAX_BRANCHES = 17; // Maximum branching factor of the tree
+    private static final int OVERSHOT = 1000;   // Used for overestimating the estimated score
+
+    // Redefined here because in MailItem, they are defined under an array therefore not a strict constant.
+    // Must be a constant to be used in switch/case statement
+    private static final String LOW_PRIO_TAG = "LOW";
+    private static final String MED_PRIO_TAG = "MEDIUM";
+    private static final String HIGH_PRIO_TAG = "HIGH";
+
     List<MailItem> mailPool;
 
     public AdvancedMailPool() {
@@ -24,29 +32,29 @@ public class AdvancedMailPool implements IMailPool {
      * @return priority in double
      */
     public static double getMailPriorityDouble(MailItem mailItem) {
+        // copied from existing code
         switch (mailItem.getPriorityLevel()) {
-            case "LOW":
+            case LOW_PRIO_TAG:
                 return 1;
-            case "MEDIUM":
+            case MED_PRIO_TAG:
                 return 1.5;
-            case "HIGH":
+            case HIGH_PRIO_TAG:
                 return 2;
         }
         return 0;
     }
 
     /***
-     * Get a efficient combination of mails to deliver
-     * Utilizes Monte Carlo Search
+     * Get a efficient combination of mails to deliver using tree and utilizing MonteCarlo-style Search
      * @return list of mails
      */
     public List<MailItem> getMails() {
-        List<List<MailItem>> combinations = new ArrayList<>();
+        List<List<MailItem>> combinations = new ArrayList<>(); // final leaves
         Stack<List<MailItem>> stack = new Stack<>();
         int branchCount = Math.min(MAX_BRANCHES, mailPool.size());
         int depth = Math.min(MAX_DEPTH, MAX_CAPACITY);
 
-        // random start
+        // select random branches to travers down to and add to stack
         Collections.shuffle(mailPool, new Random(mailPool.size()));
         for (int m = 0; m < branchCount; m++) {
             List<MailItem> currList = new ArrayList<>();
@@ -55,13 +63,13 @@ public class AdvancedMailPool implements IMailPool {
         }
 
         while (stack.size() > 0) {
+            // get node. at this point, the combination is sorted by destination
             List<MailItem> currCombination = stack.pop();
-
-            currCombination.sort(new MailItemComparator());
 
             double currScore = getEfficiency(currCombination);
             boolean modified = false;
 
+            // depth limit reached, do not traverse more
             if (currCombination.size() >= depth) {
                 combinations.add(currCombination);
                 continue;
@@ -238,6 +246,10 @@ public class AdvancedMailPool implements IMailPool {
         return true;
     }
 
+    /***
+     * Get size of the mail pool
+     * @return size of the mail pool
+     */
     public int size() {
         return mailPool.size();
     }

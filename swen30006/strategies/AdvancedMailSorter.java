@@ -19,7 +19,7 @@ public class AdvancedMailSorter implements IMailSorter {
 
     /***
      * Fill the tube with effective combination of mails to deliver
-     * @param tube
+     * @param tube tube to fill
      * @return true/false - whether the robot is ready to leave
      */
     @Override
