@@ -3,6 +3,7 @@ package strategies;
 import automail.*;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static java.lang.Math.abs;
 
@@ -17,6 +18,9 @@ public class AdvancedMailPool implements IMailPool {
     public static final int MAX_DEPTH = 4;
     public static final int MAX_BRANCHES = 20;
     public static final int OVERSHOT = 10000;
+
+    public static final int MAX_BRANCHING_FACTOR = 5;
+    public static final int MIN_SCORE = 0;
 
     private static final double SUM_PRIORITY_FACTOR = 0.05;
     private static final double MAX_GAP_FACTOR = 1.25;
@@ -64,6 +68,7 @@ public class AdvancedMailPool implements IMailPool {
      * @return list of mails
      */
     public List<MailItem> getMails() {
+
         // get most effective combination
         List<List<MailItem>> combinations = new ArrayList<>();
         Stack<List<MailItem>> stack = new Stack<>();
@@ -121,8 +126,14 @@ public class AdvancedMailPool implements IMailPool {
                 combinations.add(currCombination);
             }
         }
-
         /*
+        List<List<MailItem>> combinations = new ArrayList<>();
+        for(MailItem mailItem : mailPool) {
+            List<MailItem> currList = new ArrayList<>();
+            currList.add(mailItem);
+            combinations.add(currList);
+        }
+
         // generate tree and get the final leaves
         int depth = (MAX_CAPACITY < MAX_DEPTH) ? MAX_CAPACITY : MAX_DEPTH;
 
@@ -150,6 +161,7 @@ public class AdvancedMailPool implements IMailPool {
                             List<MailItem> newCombination = new ArrayList<>();
                             newCombination.addAll(combination);
                             newCombination.add(mailItem);
+                            newCombination.sort(new MailItemComparator());
                             // add the combination
                             if(totalSize(newCombination) <= MAX_CAPACITY) {
                                 branchedOut = true;
@@ -172,6 +184,7 @@ public class AdvancedMailPool implements IMailPool {
         List<MailItem> curr = combinations.get(0);
 
         for(List<MailItem> combination: combinations) {
+            combination.sort(new MailItemComparator());
             double score = getEfficiency(combination);
             if(score > maxScore) {
                 curr = combination;
@@ -267,7 +280,7 @@ public class AdvancedMailPool implements IMailPool {
         if(maxFloor(mailList) > Building.MAILROOM_LOCATION)
             steps += Math.abs(maxFloor(mailList) - Building.MAILROOM_LOCATION) * 2;
         if(minFloor(mailList) < Building.MAILROOM_LOCATION)
-            steps += Math.abs(maxFloor(mailList) - Building.MAILROOM_LOCATION) * 2;
+            steps += Math.abs(minFloor(mailList) - Building.MAILROOM_LOCATION) * 2;
 
         return steps;
     }
