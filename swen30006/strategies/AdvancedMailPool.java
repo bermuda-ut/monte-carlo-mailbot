@@ -61,7 +61,16 @@ public class AdvancedMailPool implements IMailPool {
 //            System.out.println(combinations.size() + " " + stack.size());
 //            System.out.println(stack);
             List<MailItem> currCombination = stack.pop();
-            double currScore = combinationScore(currCombination);
+
+            currCombination.sort((a ,b) -> {
+                if(a.getDestFloor() < b.getDestFloor())
+                    return -1;
+                else if(a.getDestFloor() > b.getDestFloor())
+                    return 1;
+                return 0;
+            });
+
+            double currScore = getEfficiency(currCombination);
             boolean modified = false;
 
             if(currCombination.size() >= MAX_DEPTH) {
@@ -85,12 +94,18 @@ public class AdvancedMailPool implements IMailPool {
                 if(currCombination.indexOf(toAdd) < 0) {
                     List<MailItem> newCombination = new ArrayList<>(currCombination);
                     newCombination.add(toAdd);
+                    newCombination.sort((a ,b) -> {
+                        if(a.getDestFloor() < b.getDestFloor())
+                            return -1;
+                        else if(a.getDestFloor() > b.getDestFloor())
+                            return 1;
+                        return 0;
+                    });
 
-                    double newScore = combinationScore(newCombination);
+                    double newScore = getEfficiency(newCombination);
                     if(newScore >= currScore && totalSize(newCombination) <= MAX_CAPACITY) {
                         stack.add(newCombination);
                         modified = true;
-                        break;
                     }
                 }
             }
@@ -150,15 +165,10 @@ public class AdvancedMailPool implements IMailPool {
         List<MailItem> curr = combinations.get(0);
 
         for(List<MailItem> combination: combinations) {
-            combination.sort((a ,b) -> {
-                if(a.getDestFloor() < b.getDestFloor())
-                    return -1;
-                else if(a.getDestFloor() > b.getDestFloor())
-                    return 1;
-                return 0;
-            });
-
-            double score = combinationScore(combination);
+            double score = getEfficiency(combination);
+            System.out.println("--");
+            System.out.println(combination);
+            System.out.println(score);
             if(score > maxScore) {
                 curr = combination;
                 maxScore = score;
@@ -211,7 +221,7 @@ public class AdvancedMailPool implements IMailPool {
             }
 
             score += Math.pow(currTime - deliveryItem.getArrivalTime(),penalty)*priority_weight;
-            currTime += Math.abs(currFloor - deliveryItem.getDestFloor());
+            currTime += Math.abs(currFloor - deliveryItem.getDestFloor()) + 1;
             currFloor = deliveryItem.getDestFloor();
         }
         score += Math.abs(currFloor - Building.MAILROOM_LOCATION);
@@ -230,10 +240,11 @@ public class AdvancedMailPool implements IMailPool {
         int steps = mailList.size();
 
         if(maxFloor(mailList) > Building.MAILROOM_LOCATION)
-            steps += maxFloor(mailList);
+            steps += Math.abs(maxFloor(mailList) - Building.MAILROOM_LOCATION) * 2;
         if(minFloor(mailList) < Building.MAILROOM_LOCATION)
-            steps += maxFloor(mailList);
+            steps += Math.abs(maxFloor(mailList) - Building.MAILROOM_LOCATION) * 2;
 
+        System.out.println(mailList + " steps req is " + steps);
         return steps;
     }
 
